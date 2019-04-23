@@ -18,6 +18,13 @@
     - [Dynamic Segments](#dynamic-segments)
     - [Index Routes](#index-routes)
     - [Redirecting and Loading](#redirecting-and-loading)
+  - [Using Templates Properly](#using-templates-properly)
+    - [Handlebars](#handlebars)
+    - [Loops and Conditionals](#loops-and-conditionals)
+    - [Boolean Attributes](#boolean-attributes)
+    - [Named Arguments](#named-arguments)
+    - [Create a Helper](#create-a-helper)
+    - [Debugging](#debugging)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -579,3 +586,244 @@ export default Route.extend({
 });
 ```
 
+## Using Templates Properly
+
+### Handlebars
+
+- Template structure is intimately tied with routes.
+- Templates are executed after route handler and after retrieving a model
+
+**What is Handlebars.js?**
+
+- Implmentation of semantic templates
+- Separation of concerns - keep HTML separate from JS
+- Handlebars only supports properties inside expressions
+- No logic of JS code should be in template
+- But it does support expressions, conditional statments, loops
+- Can write your own helpers
+- GOTCHA: Silent failure (eg: if property call fails) -> designed to be robust, no need to conditionally check for null values when accessing a property of an object. BUT makes it harder to debug
+- Uses double curly braces to delimit expressions `{{model.BoardsSum}}`
+- Built in helpers, eg: `{{link-to "route"}}Hi!{{/link-to}}`, `{{outlet}}`
+
+### Loops and Conditionals
+
+Edit production index template, use `each` helper to iterate over each model and display its details in a table.
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+<table class="table">
+  <thead>
+    <tr>
+      <th>Dimension</th>
+      <th>Boards</th>
+      <th>BoardFeet</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each model as |row|}}
+    <tr>
+      <td>
+        {{#link-to "production.dimensino" row.DimensionID}}
+        {{row.DimensionName}}
+        {{/link-to}}
+      </td>
+      <td class="quantity">{{row.BoardsSum}}</td>
+      <td class="quantity">{{row.BoardFeetSum}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+```
+
+Want to add "zero" class to row whenever board count is 0, to make row appear dimmer. This is *binding an attribute* - bind board count to class attribute.
+
+This will NOT work because code like `> 0` is not allowed.
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+{{#if row.BoardsSum > 0}}
+<tr>
+{{else}}
+<tr class="zero">
+```
+
+This also won't work because results in unclosed <tr> tag within a block
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+{{#if row.BoardsSum}}
+<tr>
+  {{else}}
+<tr class="zero">
+  ```
+
+Solution: Use inline version of `if` helper, has no `#` in front
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+<table class="table">
+  <thead>
+    <tr>
+      <th>Dimension</th>
+      <th>Boards</th>
+      <th>BoardFeet</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each model as |row|}}
+    {{!-- if BoardsSum is truthy, blank string, otherwise zero --}}
+    <tr class="{{if row.BoardsSum "" "zero" }}">
+      <td>
+        {{#link-to "production.dimension" row.DimensionID}}
+        {{row.DimensionName}}
+        {{/link-to}}
+      </td>
+      <td class="quantity">{{row.BoardsSum}}</td>
+      <td class="quantity">{{row.BoardFeetSum}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+```
+
+Now want to apply the `zero` class on any row with 10 boards or less, then can't rely on truthiness. Could provide a calculated value before template renders -> *computed property* (will discuss later), but this is putting view logic where it shouldn't be.
+
+Solution is to use sub expressions (come with Ember) and truth helpers (available via addon).
+
+```shell
+$ ember install ember-truth-helpers
+# restart ember server
+```
+
+Modify template - use parens to create a sub-expression - nesting an expression within another expression.
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+<tbody>
+  {{#each model as |row|}}
+  <tr class="{{if (gt row.BoardsSum 10) "" "zero" }}">
+    <td>
+      {{#link-to "production.dimension" row.DimensionID}}
+      {{row.DimensionName}}
+      {{/link-to}}
+    </td>
+    <td class="quantity">{{row.BoardsSum}}</td>
+    <td class="quantity">{{row.BoardFeetSum}}</td>
+  </tr>
+  {{/each}}
+</tbody>
+```
+
+**Additonal Template Notes**
+
+- There's also an `unless` helper that is opposite of `if`.
+- When helper expects a block, will begin with hash, eg `{{#each}}` and has closing tag `{{/each}}`
+- Inline helper does not use hash
+
+### Boolean Attributes
+
+Special case
+
+Add edit column to boards view with checkbox. To disable checkbox, must provide a boolean value to the `disabled` attribute. Eg, to disable checkbox for rows where BoardsSum is 0:
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+<th>{{fa-icon "cogs"}}</th>
+...
+<td><input type="checkbox" disabled={{eq row.BoardsSum 0}}></td>
+```
+
+### Named Arguments
+
+In addition to regular arguments, helpers can take *named arguments*. To demonstrate, first install an addon that exposes accounting.js library to Ember via helpers:
+
+```shell
+$ ember install ember-cli-accounting
+# restart server
+```
+
+Modify production view,  use format-number helper on BoardFeetSum
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+<td class="quantity">{{format-number row.BoardFeetSum precision=2}}</td>
+```
+
+Now BoardFeet column displays with 2 digits of precision.
+
+Named arguments are like optional parameters, provide flexibility.
+
+### Create a Helper
+
+Create a row-class helper to replace current inline conditional `<tr class="{{if (gt row.BoardsSum 10) "" "zero" }}">`. Helper will be re-usable on other pages.
+
+Generate helper using cli
+
+```shell
+$ ember g helper row-class
+installing helper
+  create app/helpers/row-class.js
+installing helper-test
+  create tests/integration/helpers/row-class-test.js
+```
+
+Edit new helper (generator already added necessary boilerplate). Use an array to build a list of classes
+
+```javascript
+// loopylog/app/helpers/row-class.js
+import {
+  helper
+} from '@ember/component/helper';
+
+export function rowClass(params /*, hash*/ ) {
+  if (params[0]) {
+    const row = params[0];
+    const class_names = [];
+    if (row.Boards === 0 || row.BoardsSum === 0) {
+      class_names.push('zero');
+    }
+    // other conditions can be added here in the future
+
+    return class_names.join(' ');
+  }
+}
+
+export default helper(rowClass);
+```
+
+Modify production template to use new row-class helper instead of conditional, passing in `row` as argument
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+<tr class="{{row-class row}}">
+  ```
+
+### Debugging
+
+Suppose template has a typo in property name such as `{{row.DimensioName.length}}` -> Will have NO error on page or in console, just won't display anything.
+
+Handlebars fails silently by design - supports chaining multiple object.prop.prop... without needing null checks.
+
+**Template Debug Helpers**
+
+`log <expressions, variables, primitives>` Output one or many to console, eg:
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+{{log row.DimensioName.length}}
+```
+
+Shows `undefined` in Console.
+
+`debugger` Halt execution inside debugger, use `get(var)` to retrieve variables, eg:
+
+```html
+<!-- loopylog/app/templates/production/index.hbs -->
+{{#each model as |row|}}
+  ...
+  {{debugger}}
+  ...
+{{/each}}
+```
+
+![debugger console](doc-images/debugger-console.png "debugger console")
