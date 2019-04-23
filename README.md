@@ -25,6 +25,11 @@
     - [Named Arguments](#named-arguments)
     - [Create a Helper](#create-a-helper)
     - [Debugging](#debugging)
+  - [Getting to Know the Object Model](#getting-to-know-the-object-model)
+    - [What is Ember Object](#what-is-ember-object)
+    - [Demo: Using Ember Object](#demo-using-ember-object)
+    - [Computed Properties](#computed-properties)
+    - [Arrays and Controllers](#arrays-and-controllers)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -827,3 +832,286 @@ Shows `undefined` in Console.
 ```
 
 ![debugger console](doc-images/debugger-console.png "debugger console")
+
+## Getting to Know the Object Model
+
+### What is Ember Object
+
+- Ember has it's own way to do classes `Ember.Object`
+- Observation of property value changes
+- Templates / computed properties
+- Consistent get / set interface
+- Class, mixin and constructor methods
+- Life cycle hooks
+- Extends Array and String
+
+**Extending Ember Object or Another Class**
+
+- Very common in Ember
+- `extend` method defines a subclass of either Ember.Object or another existing class
+- Inside `extend`, define methods for the class
+- Can override parent methods with `this._super`
+- Use `this._super` to call the same method in the parent class
+
+```javascript
+const Person = Ember.Object.extend({
+  say(thing) {
+    alert(thing);
+    this._super(...arguments);
+  }
+});
+
+export default Ember.Component.extend({
+  classNameBindings: ['isUrgent'], isUrgent: true
+});
+```
+
+**Initializing a Class Instance**
+
+- `create` method called on class with any starting values -> creates instance of that class
+- `init` method invoked automatically, put any default values here
+
+```javascript
+const Person = Ember.Object.extend({
+  init() {
+    alert(`${this.get('name')} reporting for duty`);
+  }
+});
+Person.create({name: 'Elmer Fudd'}); // alert "Elmer Fudd reporting for duty"
+```
+
+**Changing Object Properties**
+
+- Ember needs to observe all object properties
+- Use `get()` or `set()` to change object properties -> guarantees computed properties get calculated
+- For observability on arrays, use `pushObject()`, `removeObject()` etc.
+
+```javascript
+const Person = Ember.Object.extend({
+  name: 'Elmer Fudd'
+});
+let p = Person.create();
+p.get('name'); // Elmer Fudd
+p.set('name', 'Tobias Funke');
+p.get('name'); // Tobias Funkey
+```
+
+**Computed Properties**
+
+- Declare functions and their dependencies as properties
+- Automatically called when asked for or when dependent properties change
+
+```javascript
+Person = Ember.Object.extend({
+  first: null,
+  last: null,
+  // fullName is computed property depending on first and last, when they change, fullName changes
+  fullName: Ember.computed('first', 'last', function() {
+    return `${this.get('first') ${this.get('last')}}`;
+  })
+});
+let ironMan = Person.create({
+  first: 'Tony',
+  last: 'Stark'
+});
+ironMan.get('fullName'); // Tony Stark
+```
+
+**Computed Property Macros**
+
+- *Macro* Short expressions of common computed properties
+- Others include lessThan, greaterThan, min, max etc.
+
+```javascript
+Person = Ember.Object.extend({
+  name: 'Tony Stark',
+  isIronManLongWay: Ember.computed('name', function() {
+    return this.get('name') === 'Tony Stark';
+  }),
+  // Macro, `equal` computed property is equivalent to the long way defined above
+  isRonMan: Ember.computed.equal('name', 'Tony Stark')
+});
+```
+
+### Demo: Using Ember Object
+
+Create a new model - do NOT use generator because don't want to tie it to ember data (will be covered later).
+
+```javascript
+// loopylog/app/models/production.js
+import EmberObject from '@ember/object'
+export default EmberObject.extend({
+  // ...
+});
+```
+
+Modify production route handler to use this model object. Import it, then convert each item of json data to production model:
+
+```javascript
+// loopylog/app/routes/production.js
+import Route from '@ember/routing/route';
+import $ from 'jquery'
+import production from '../models/production';
+
+export default Route.extend({
+  model(params) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const jsonData = $.getJSON(`/data/production.json?start=${params.start}&end=${params.end}`)
+        let records;
+        jsonData.then(data => {
+          records = data.map(item => production.create(item))
+          resolve(records)
+        });
+      }, 400)
+    })
+  }
+});
+```
+
+No change needed to template when changing from regular js object to Ember object. Ember automatically switched to using the `get` methods on Ember object to access properties in the template.
+
+### Computed Properties
+
+Use to make more clear property names from production.json data
+
+```javascript
+// loopylog/app/models/production.js
+import EmberObject, {
+  computed
+} from '@ember/object'
+
+export default EmberObject.extend({
+  boards: computed('BoardsSum', function () {
+    return this.get('BoardsSum');
+  })
+});
+```
+
+Modify template to use computed property
+
+```html
+{{!-- <td class="quantity">{{row.BoardsSum}}</td> --}}
+<td class="quantity">{{row.boards}}</td>
+```
+
+Renaming a property is so common, use a macro `alias`
+
+```javascript
+import EmberObject, {
+  computed
+} from '@ember/object'
+
+export default EmberObject.extend({
+  boards: computed('BoardsSum', function () {
+    return this.get('BoardsSum');
+  }),
+  boardfeet: computed.alias('BoardFeetSum')
+});
+```
+
+Computed properties can depend on multiple other properties
+
+### Arrays and Controllers
+
+Want to add a totals row above `each` loop in production listing to display total boards and total boards feet
+
+```html
+<tr class="total">
+  <td>All Dimensions</td>
+  <td>{{total_boards}}</td>
+  <td>{{format-number total}}</td>
+</tr>
+{{#each model as |row|}}
+  ...
+{{/each}}
+```
+
+Good use for computed properties but total doesn't belong in single production model.
+
+*Controller* Another file that lies between route handler and template.
+
+Kind of like decorator for model. Gets model from route handler. Extends from Ember.Object so also has computed properties. All of controller properties are given to template.
+
+![controller](doc-images/controller.png "controller")
+
+Generate controller
+
+```shell
+$ ember g controller production/index
+installing controller
+  create app/controllers/production/index.js
+installing controller-test
+  create tests/unit/controllers/production/index-test.js
+```
+
+Create `total_boards` property in controller. This depends on the `model` which in the case of production, is the entire array of production model objects.
+
+```javascript
+// loopylog/app/controllers/production/index.js
+import Controller from '@ember/controller';
+import {
+  computed
+} from '@ember/object';
+
+export default Controller.extend({
+  total_boards: computed('model', function () {
+    return this.get('model').reduce(function (prev, row) {
+      return prev + parseFloat(row.get('boards'));
+    }, 0);
+  })
+});
+```
+
+Now production view shows a row with total_boards but PROBLEM - use Ember Inspector -> View Tree -> Click on $E in model column, sends all the model objects to console.
+
+Enter `$E[0]` in console to get reference to first model object.
+
+Try `$E[0].get('boards')` - shows 13.
+
+Now try setting the computed property: `$E[0].set('boards', 15)`
+
+In the UI, the Boards property for that row has been updated but the `total_boards` has not, even though it's computed to be the sum of all the `boards`. This is because controller computed property is based on `model`, not any of its members or properties.
+
+Need to tell `total_boards` computed property to look at `boards` property of each member in `model`.
+
+```javascript
+// loopylog/app/controllers/production/index.js
+import Controller from '@ember/controller';
+import {
+  computed
+} from '@ember/object';
+
+export default Controller.extend({
+  total_boards: computed('model.@each.boards', function () {
+    return this.get('model').reduce(function (prev, row) {
+      return prev + parseFloat(row.get('boards'));
+    }, 0);
+  })
+});
+```
+
+Now repeat console test and notice total is updated.
+
+**Computed Property Macros for Arrays**
+
+First crete property `boardfeets` that is array of all `boardfeet` values from `model`. Updates when any single value changes.
+
+Then create total_boardfeet property, using `computed.sum` macro. Then update `total_boards` property to use same technique:
+
+```javascript
+// loopylog/app/controllers/production/index.js
+import Controller from '@ember/controller';
+import {
+  computed
+} from '@ember/object';
+
+export default Controller.extend({
+  boards: computed.mapBy('model', 'boards'),
+  total_boards: computed.sum('boards'),
+  max_boards: computed.max('boards'),
+  boardfeets: computed.mapBy('model', 'boardfeet'),
+  total_boardfeet: computed.sum('boardfeets'),
+  max_boardfeet: computed.max('boardfeets')
+});
+```
