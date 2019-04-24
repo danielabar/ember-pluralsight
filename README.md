@@ -30,6 +30,12 @@
     - [Demo: Using Ember Object](#demo-using-ember-object)
     - [Computed Properties](#computed-properties)
     - [Arrays and Controllers](#arrays-and-controllers)
+  - [Adding Reusable Components](#adding-reusable-components)
+    - [What are Components](#what-are-components)
+    - [Controllers no more?](#controllers-no-more)
+    - [Using a Component](#using-a-component)
+    - [Changing the tagName](#changing-the-tagname)
+    - [Handling a Block](#handling-a-block)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -145,7 +151,7 @@ Note that server auto detects new file and reloads browser.
 
 Edit `application.hbs`:
 
-```html
+```hbs
 <!-- app/templates/application.hbs -->
 <h1>Loopy Lumber Co</h1>
 ```
@@ -175,7 +181,7 @@ Route handler has been created at `loopylog/app/routes/production.js`
 
 Create link to this new route on home page. Can't use regular html link, instead if `link-to` helper, passing it name of target route. Double curly braces lets handlebars distinguish between expressions and regular html.
 
-```html
+```hbs
 <!-- loopylog/app/templates/application.hbs -->
 {{#link-to "production"}}Production{{/link-to}}
 ```
@@ -184,7 +190,7 @@ Create link to this new route on home page. Can't use regular html link, instead
 
 Edit production template with some sample content
 
-```html
+```hbs
 <!-- loopylog/app/templates/production.hbs -->
 <h2>Production</h2>
 ```
@@ -195,7 +201,7 @@ This is because we haven't told the application layout where to put the view, us
 
 Application template is parent template of *all* other templates.
 
-```html
+```hbs
 <!-- loopylog/app/templates/application.hbs -->
 <h1>Loopy Lumber Co</h1>
 
@@ -212,7 +218,7 @@ $ ember install ember-pikaday
 
 Use `pikaday-input` helper in production template to display a field with datepicker
 
-```html
+```hbs
 <!-- loopylog/app/templates/production.hbs -->
 <h2>Production</h2>
 
@@ -273,7 +279,7 @@ $ ember install ember-font-awesome  # icons
 
 Update main application template to contain header and main content area
 
-```html
+```hbs
 <!-- loopylog/app/templates/application.hbs -->
 <nav class="title">
   <h1>Loopy Lumber Co</h1>
@@ -310,7 +316,7 @@ export default Route.extend({
 
 Display model attributes in production template using handlebars syntax
 
-```html
+```hbs
 <!-- loopylog/app/templates/production.hbs -->
 <h2>Production</h2>
 
@@ -352,7 +358,7 @@ export default Route.extend({
 
 Data is an array so for now, modify template to use array syntax to display 10th item
 
-```html
+```hbs
 <!-- loopylog/app/templates/production.hbs -->
 <h2>Production</h2>
 
@@ -379,7 +385,7 @@ installing route-test
 
 Modify production template to link to dimension route using `link-to` helper. Note route name is `production.dimension`, not `dimension` due to nesting. Ember routes named using dots, not slash.
 
-```html
+```hbs
 <!-- loopylog/app/templates/production.hbs -->
 <h2>Production</h2>
 
@@ -391,7 +397,7 @@ Modify production template to link to dimension route using `link-to` helper. No
 
 To show content for nested dimension route, add `outlet` helper to production template, which is the parent template for dimension child
 
-```html
+```hbs
 <!-- loopylog/app/templates/production.hbs -->
 <h2>Production</h2>
 
@@ -405,7 +411,7 @@ To show content for nested dimension route, add `outlet` helper to production te
 
 Modify dimension template just so we can see some content rendering
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/dimension.hbs -->
 <h3>Dimension</h3>
 ```
@@ -466,7 +472,7 @@ export default Route.extend({
 
 In dimension template, display the dimension details
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/dimension.hbs -->
 <h3>Dimension: {{model.DimensionName}}</h3>
 ```
@@ -475,7 +481,7 @@ Now old production url is broken [http://localhost:4200/production](http://local
 
 I also had to modify link-to in production template to specify dimension route params, otherwise would not render link. See [link-to ember docs](https://guides.emberjs.com/release/templates/links/) for more details.
 
-```html
+```hbs
 <!-- loopylog/app/templates/production.hbs -->
 <h2>Production</h2>
 
@@ -510,7 +516,7 @@ installing template
 
 Move model data out of production template to index template
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 <p>Product: {{model.[10].ProductName}}</p>
 <p>Dimension:
@@ -563,7 +569,7 @@ installing template
 
 Put some content in production loading template
 
-```html
+```hbs
 <!-- loopylog/app/templates/production-loading.hbs -->
 LOADING...
 ```
@@ -614,7 +620,7 @@ export default Route.extend({
 
 Edit production index template, use `each` helper to iterate over each model and display its details in a table.
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 <table class="table">
   <thead>
@@ -644,7 +650,7 @@ Want to add "zero" class to row whenever board count is 0, to make row appear di
 
 This will NOT work because code like `> 0` is not allowed.
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 {{#if row.BoardsSum > 0}}
 <tr>
@@ -654,7 +660,7 @@ This will NOT work because code like `> 0` is not allowed.
 
 This also won't work because results in unclosed <tr> tag within a block
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 {{#if row.BoardsSum}}
 <tr>
@@ -664,7 +670,7 @@ This also won't work because results in unclosed <tr> tag within a block
 
 Solution: Use inline version of `if` helper, has no `#` in front
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 <table class="table">
   <thead>
@@ -702,7 +708,7 @@ $ ember install ember-truth-helpers
 
 Modify template - use parens to create a sub-expression - nesting an expression within another expression.
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 <tbody>
   {{#each model as |row|}}
@@ -731,7 +737,7 @@ Special case
 
 Add edit column to boards view with checkbox. To disable checkbox, must provide a boolean value to the `disabled` attribute. Eg, to disable checkbox for rows where BoardsSum is 0:
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 <th>{{fa-icon "cogs"}}</th>
 ...
@@ -749,7 +755,7 @@ $ ember install ember-cli-accounting
 
 Modify production view,  use format-number helper on BoardFeetSum
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 <td class="quantity">{{format-number row.BoardFeetSum precision=2}}</td>
 ```
@@ -798,7 +804,7 @@ export default helper(rowClass);
 
 Modify production template to use new row-class helper instead of conditional, passing in `row` as argument
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 <tr class="{{row-class row}}">
   ```
@@ -813,7 +819,7 @@ Handlebars fails silently by design - supports chaining multiple object.prop.pro
 
 `log <expressions, variables, primitives>` Output one or many to console, eg:
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 {{log row.DimensioName.length}}
 ```
@@ -822,7 +828,7 @@ Shows `undefined` in Console.
 
 `debugger` Halt execution inside debugger, use `get(var)` to retrieve variables, eg:
 
-```html
+```hbs
 <!-- loopylog/app/templates/production/index.hbs -->
 {{#each model as |row|}}
   ...
@@ -990,7 +996,7 @@ export default EmberObject.extend({
 
 Modify template to use computed property
 
-```html
+```hbs
 {{!-- <td class="quantity">{{row.BoardsSum}}</td> --}}
 <td class="quantity">{{row.boards}}</td>
 ```
@@ -1014,9 +1020,11 @@ Computed properties can depend on multiple other properties
 
 ### Arrays and Controllers
 
+***As of Ember 2: Components replace Controller, Template and View***
+
 Want to add a totals row above `each` loop in production listing to display total boards and total boards feet
 
-```html
+```hbs
 <tr class="total">
   <td>All Dimensions</td>
   <td>{{total_boards}}</td>
@@ -1114,4 +1122,217 @@ export default Controller.extend({
   total_boardfeet: computed.sum('boardfeets'),
   max_boardfeet: computed.max('boardfeets')
 });
+```
+
+## Adding Reusable Components
+
+- Control how the interface behaves.
+- Sit between Route Handler and rendered Page
+- Template contains HTML - describes how page *looks*
+- How to respond to event from HTML? Can't put logic in template
+- Code for responding to behaviour belongs in component
+
+### What are Components
+
+- Re-usable chunk of HTML (aka web component)
+- Can be used in different places in app
+- Can be shared between separate apps
+- Conform to W3C Custom Element spec
+- Require dash in name
+- Have two parts: .js file for behaviour & .hbs file for appearnace
+- Isolated by design to support re-use
+- Only have access to what is explicitly passed to them - makes it easy to test and debug
+- (future) Enforce one way data binding, child component should not be able to modify data passed in unless explicitly permitted
+
+### Controllers no more?
+
+- As of Ember 2, components replace controller/template/view
+- Component js file combines behaviour of controller and view, decorating model, and handling events
+- Component hbs file is template to describe layout
+- Cannot be routed to directly from router? So still need controller/template as target of router
+- Will be simpler if/when routable components are brought to Ember, something like this:
+
+![routable component](doc-images/routable-component.png "routable component")
+
+### Using a Component
+
+Move production table out of where it currently is in a template, and into a table component.
+
+Generate component
+
+```shell
+$ ember g component table-production
+installing component
+  create app/components/table-production.js
+  create app/templates/components/table-production.hbs
+installing component-test
+  create tests/integration/components/table-production-test.js
+```
+
+Copy all table markup from `loopylog/app/templates/production/index.hbs` to `table-production.hbs`
+
+Replace contents of `production/index.hbs` with call to component: `{{table-production}}`
+
+Notice in app, no data is displayed now. Controller/Template receive model automatically, whereas Component is isolated - requires data to be passed in explicitly.
+
+Modify production template to pass in model as *named parameter*
+
+```hbs
+<!-- loopylog/app/templates/production/index.hbs -->
+{{table-production model=model}}
+```
+
+Now production table data is displayed because component has access to model.
+
+BUT still no totals! Component doesn't have access to computed properties that are currently in production controller `loopylog/app/controllers/production/index.js`
+
+Might be tempted to pass each individual needed property into component `{{table-production model=model boards-boards total_boards=total_boards...}}` BUT THIS IS AN ANTI-PATTERN! Makes component harder to re-use.
+
+Solution is to move all computed properties from production controller `loopylog/app/controllers/production/index.js` into js file for component
+
+```javascript
+// loopylog/app/components/table-production.js
+import Component from '@ember/component';
+import {
+  computed
+} from '@ember/object';
+
+export default Component.extend({
+  boards: computed.mapBy('model', 'boards'),
+  total_boards: computed.sum('boards'),
+  boardfeets: computed.mapBy('model', 'boardfeet'),
+  total_boardfeet: computed.sum('boardfeets'),
+  max_boardfeet: computed.max('boardfeets')
+});
+```
+
+Now total row is displaying data in UI.
+
+**Visual Summary**
+
+![component structure](doc-images/component-structure.png "component structure")
+
+### Changing the tagName
+
+Looking at generated markup in devtools, table got wrapped in a div:
+
+```html
+<div id="ember183" class="ember-view">
+  <table class="table">
+    ...
+  </table>
+</div>
+```
+
+Ember uses the div id to connect to and track the html.
+
+Having an additional div appear in markup could cause styling issues. To prevent this, add `tagName` property in component js and classNames property with array of all css classes that should be on the tag
+
+```javascript
+// loopylog/app/components/table-production.js
+import Component from '@ember/component';
+import {
+  computed
+} from '@ember/object';
+
+export default Component.extend({
+  tagName: 'table',
+  classNames: ['table'],
+  boards: computed.mapBy('model', 'boards'),
+  total_boards: computed.sum('boards'),
+  boardfeets: computed.mapBy('model', 'boardfeet'),
+  total_boardfeet: computed.sum('boardfeets'),
+  max_boardfeet: computed.max('boardfeets')
+});
+```
+
+Then modify component template `loopylog/app/templates/components/table-production.hbs` - remove opening and closing table tags since these will now be generated automatically by component.
+
+Now generated markup is:
+
+```html
+<table id="ember183" class="table ember-view">
+  ...
+</table>
+```
+
+### Handling a Block
+
+Generate a component that renders a table header cell
+
+```shell
+$ ember g component table-th
+installing component
+  create app/components/table-th.js
+  create app/templates/components/table-th.hbs
+installing component-test
+  create tests/integration/components/table-th-test.js
+```
+
+Replace contents of `app/templates/components/table-th.hbs` with a single named expression: `{{name}}`
+
+Specify tag name in component js
+
+```javascript
+// app/components/table-th.js
+import Component from '@ember/component';
+export default Component.extend({
+  tagName: 'th'
+});
+```
+
+Modify table-production template to use this new table-th component, passing in text as named parameter
+
+```hbs
+<thead>
+  <tr>
+    {{table-th name="Dimension"}}
+    {{table-th name="Boards"}}
+    {{table-th name="BoardFeet"}}
+    <th>{{fa-icon "cogs"}}</th>
+  </tr>
+</thead>
+<tbody>
+  ...
+</tbody>
+```
+
+In browser, table still looks as before, but notice table header markup such as `<th id="ember186 class="ember-view">Dimension</th>`
+
+Last table header is trickier to replace with component because it's content is not a simple text, but rather a helper that generates the `cogs` font awesome icon.
+
+Solution is to modify component to accept a block to be evaluated, then it can be used like this
+
+```hbs
+<thead>
+  <tr>
+    {{table-th name="Dimension"}}
+    {{table-th name="Boards"}}
+    {{table-th name="BoardFeet"}}
+    {{#table-th}}{{fa-icon "cogs"}}{{/table-th}}
+  </tr>
+</thead>
+<tbody>
+  ...
+</tbody>
+```
+
+Modify table-th template with `yield` helper, which gives control to block passed in. This in turn will evaluate any content passed in.
+
+```hbs
+<!-- loopylog/app/templates/components/table-th.hbs -->
+{{yield}}
+```
+
+This works in that now icon displays as table header, BUT all the other header rows are broken - not showing the `name` parameter.
+
+Solution to support both named parameter and blocks is to use `if` and `else` helpers in component
+
+```hbs
+<!-- loopylog/app/templates/components/table-th.hbs -->
+{{#if hasBlock}}
+  {{yield}}
+{{else}}
+  {{name}}
+{{/if}}
 ```
