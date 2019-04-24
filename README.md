@@ -41,6 +41,10 @@
     - [Basic Actions](#basic-actions)
     - [Sending Actions](#sending-actions)
     - [More Closure Actions](#more-closure-actions)
+  - [Using Services](#using-services)
+    - [What are Services and Initializers](#what-are-services-and-initializers)
+    - [Creating a Service](#creating-a-service)
+    - [Using an Initializer](#using-an-initializer)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -1959,3 +1963,152 @@ export default Component.extend({
   }
 });
 ```
+
+## Using Services
+
+### What are Services and Initializers
+
+- Lives for the duration of app
+- Available to different parts of app
+- Eg: User authentication, persistent conections (web sockets, server events)
+- Ember Data is a service
+- Singleton class or class that has only one instance and needed across entire application
+
+**Initializers**
+
+- Often paired with service
+- Configure on boot
+- Example: Configure dependency injection
+
+### Creating a Service
+
+- Make data class that will retrieve data from server
+- Use in production and dimension routes
+
+Generate `mystore` service
+
+```shell
+$ ember g service mystore
+installing service
+  create app/services/mystore.js
+installing service-test
+  create tests/unit/services/mystore-test.js
+```
+
+Implment `production` function in `mystore` service to return data from json given start and end:
+
+```javascript
+// loopylog/app/services/mystore.js
+import Service from '@ember/service';
+import Production from '../models/production';
+import $ from 'jquery';
+
+export default Service.extend({
+  production(start, end) {
+    const jsonData = $.getJSON(`/data/production.json?start=${start}&end=${end}`)
+    let records;
+    return jsonData.then(data => {
+      records = data.map(item => Production.create(item))
+      return records;
+    });
+  }
+});
+```
+
+Remove all data retreiving code from production route handler and inject `mystore` service so it can be used.
+
+```javascript
+// loopylog/app/routes/production.js
+import Route from '@ember/routing/route';
+import { inject } from '@ember/service';
+import moment from 'moment';
+
+export default Route.extend({
+  mystore: inject('mystore'),
+  model(params) {
+    this.set('params', params);
+    return this.get('mystore').production(params.start, params.end);
+  },
+  setupController(controller, model) {
+    // ...
+  },
+  actions: {
+    // ...
+  }
+});
+```
+
+Now table data displays as before.
+
+Move dimension data call from dimension route handler to `mystore` service.
+
+First, modify store to store production data in `data` attribute when it's initially retrieved. Make sure arrow syntax rather than function is being used so that `this` refers to service.
+
+Then add `dimension` function
+
+```javascript
+// loopylog/app/services/mystore.js
+export default Service.extend({
+  production(start, end) {
+    const jsonData = $.getJSON(`/data/production.json?start=${start}&end=${end}`)
+    let records;
+    return jsonData.then(data => {
+      records = data.map(item => Production.create(item))
+      this.set('data', records);
+      return records;
+    });
+  },
+  dimension(dimension_id) {
+    return this.get('data').findBy('DimensionID', parseInt(dimension_id));
+  }
+});
+```
+
+Edit dimension route handler, remove old code in `model` method and replace with mystore function, also inject mystore. No need to pass string to inject function, Ember will look for service with same name as property.
+
+```javascript
+// loopylog/app/routes/production/dimension.js
+import {
+  inject
+} from '@ember/service';
+import Route from '@ember/routing/route';
+
+export default Route.extend({
+  mystore: inject(),
+  model(params) {
+    return this.get('mystore').dimension(params.dimension_id);
+  }
+});
+```
+
+### Using an Initializer
+
+Use to configure state of application on bootup, eg: inject a service into all routes of app.
+
+Would like to inject store service into every route handler automatically - use *initializer*.
+
+Generate:
+
+```shell
+$ ember g initializer mystore
+installing initializer
+  create app/initializers/mystore.js
+installing initializer-test
+  create tests/unit/initializers/mystore-test.js
+```
+
+Implement initializer
+
+```javascript
+export function initialize(application) {
+  application.inject('route', 'mystore', 'service:mystore');
+}
+
+export default {
+  initialize
+};
+```
+
+Remove injection from production and dimension route handlers.
+
+App works as before.

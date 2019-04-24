@@ -3,11 +3,11 @@
   start_time=start_time
   end_date=end_date
   end_time=end_time
-  load=(route-action 'loadData')
+  load=(route-action "loadData")
 }}
 
 <h2>
-  {{#link-to 'production' start end}}
+  {{#link-to "production" start end}}
     Production From {{unbound start_time}} to {{unbound end_time}}
   {{/link-to}}
 </h2>

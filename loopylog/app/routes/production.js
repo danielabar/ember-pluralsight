@@ -1,21 +1,10 @@
 import Route from '@ember/routing/route';
-import $ from 'jquery'
-import production from '../models/production';
 import moment from 'moment';
 
 export default Route.extend({
   model(params) {
     this.set('params', params);
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const jsonData = $.getJSON(`/data/production.json?start=${params.start}&end=${params.end}`)
-        let records;
-        jsonData.then(data => {
-          records = data.map(item => production.create(item))
-          resolve(records)
-        });
-      }, 400)
-    })
+    return this.get('mystore').production(params.start, params.end);
   },
   setupController(controller, model) {
     this._super(controller, model);
