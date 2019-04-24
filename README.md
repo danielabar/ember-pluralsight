@@ -36,6 +36,11 @@
     - [Using a Component](#using-a-component)
     - [Changing the tagName](#changing-the-tagname)
     - [Handling a Block](#handling-a-block)
+  - [Triggering Events & Actions](#triggering-events--actions)
+    - [Why Actions?](#why-actions)
+    - [Basic Actions](#basic-actions)
+    - [Sending Actions](#sending-actions)
+    - [More Closure Actions](#more-closure-actions)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -1335,4 +1340,622 @@ Solution to support both named parameter and blocks is to use `if` and `else` he
 {{else}}
   {{name}}
 {{/if}}
+```
+
+## Triggering Events & Actions
+
+### Why Actions?
+
+- Mechanism for users to interact with controls that change application state
+- Need input helpers to get user input for these actions
+- Used to control how application behaves
+
+**Data Down Actions Up (DDAU)**
+
+- Data should be loaded in route handlers and passed down to each template and component in hierarchy
+- Where to change data or change route? eg: component may need to create new model
+- Actions allow this kind of code to run where it needs to be
+- Eg: Button component should not know how to create every possible model in app, but it can respond to an event and send action back to code that does know how to handle this
+
+![ddau](doc-images/ddau.png "ddau")
+
+### Basic Actions
+
+Generate a form component for editing a dimension
+
+```shell
+$ ember g component form-dimension
+installing component
+  create app/components/form-dimension.js
+  create app/templates/components/form-dimension.hbs
+installing component-test
+  create tests/integration/components/form-dimension-test.js
+```
+
+Modify dimension template to call the new form component, passing in model
+
+```hbs
+<!-- loopylog/app/templates/production/dimension.hbs -->
+<h3>Dimension: {{model.DimensionName}}</h3>
+{{form-dimension model=model}}
+```
+
+Add the following markup to the form template and invoke `action` helper passing in "edit" string.
+
+```hbs
+<!-- loopylog/app/templates/components/form-dimension.hbs -->
+<span class="form">
+  <p>Dimension: {{model.DimensionName}}</p>
+  <p>Board: {{model.boards}}</p>
+  <p>BoardFeet: {{model.boardfeet}}</p>
+  <p>
+    <span {{action 'edit'}}>{{fa-icon 'pencil'}}</span>
+  </p>
+</span>
+```
+
+`action` heper will call an `edit` action in component when icon is clicked.
+
+To create action, add `actions` property in form copmonent js, define `edit` function in `actions` property
+
+```javascript
+// loopylog/app/components/form-dimension.js
+import Component from '@ember/component';
+
+export default Component.extend({
+  editing: false,
+  actions: {
+    edit() {
+      this.set('editing', true)
+    },
+    save() {
+      // TBD
+    },
+    cancel() {
+      // TBD
+    }
+  }
+});
+```
+
+Modify form template to conditonally display based on `editing` prpoerty. If editing, use `input` helper which takes a named parameter `value`, which binds input to whatever is passed in.
+
+```hbs
+{{#if editing}}
+  <span class="form dirty">
+    <p>Dimension: {{input value=model.DimensionName}}</p>
+    <p>Board: {{input value=model.boards}}</p>
+    <p>BoardFeet: {{input value=model.boardfeet}}</p>
+    <p>
+      <span {{action 'save'}}>{{fa-icon 'floppy-o'}}</span>
+      <span {{action 'cancel'}}>{{fa-icon 'ban'}}</span>
+    </p>
+  </span>
+{{else}}
+  <span class="form">
+    <p>Dimension: {{model.DimensionName}}</p>
+    <p>Board: {{model.boards}}</p>
+    <p>BoardFeet: {{model.boardfeet}}</p>
+    <p>
+      <span {{action 'edit'}}>{{fa-icon 'pencil'}}</span>
+    </p>
+  </span>
+{{/if}}
+```
+
+Now the `pencil` icon is clickable, clicking on it will invoke the `edit` action, which in trun sets `editing` property to true, which in turn causes the template the modify its display based on `if/else` helper and display an editable form.
+
+Implement `save` and `cancel` actions in component - just a dummy implementation since we don't have a server to save to
+
+```javascript
+// loopylog/app/components/form-dimension.js
+import Component from '@ember/component';
+
+export default Component.extend({
+  editing: false,
+  actions: {
+    edit() {
+      this.set('editing', true);
+    },
+    save() {
+      //save something to the server
+      this.set('editing', false);
+    },
+    cancel() {
+      this.set('editing', false);
+    }
+  }
+});
+```
+
+Finally in table production template, replace checkbox with link to product dimension
+
+```hbs
+<!-- loopylog/app/templates/components/table-production.hbs -->
+...
+<td>
+  {{#link-to "production.dimension" row.DimensionID}}
+    {{fa-icon 'search'}}
+  {{/link-to}}
+</td>
+...
+```
+
+### Sending Actions
+
+Implement feature from mockup where user can enter different start/end dates and clikc Load Data to load a new url with a different range of data
+
+![mockup](doc-images/mockup.png "mockkup")
+
+Modify production template - add inputs for changing page. Use a form tag specifing action and `on="submit"` because don't want this to happen on click. The `on` named parameter is for setting which DOM event should trigger the action.
+
+```hbs
+<!-- loopylog/app/templates/production.hbs -->
+<header class="details">
+  <span>
+    <form {{action "loadData" on="submit"}}>
+      <p>Start Date: {{pikaday-input value=start_date format="MM/DD/YYYY"}}</p>
+      <p>End Date: {{pikaday-input value=end_date format="MM/DD/YYYY"}}</p>
+      <p>Start Time: {{input value=start_time}}</p>
+      <p>End Time: {{input value=end_time}}</p>
+      <p><button type="submit">Load Data</button></p>
+    </form>
+  </span>
+</header>
+
+<h2>Production</h2>
+
+{{outlet}}
+```
+
+UI now displays form, but fields have no values/data in them. The data to be displayed are *dynamic parameters* from route: `:start` and `:end`. But route parameters not available to templates, usually only available in route handler for getting the model.
+
+Add code to route handler to insert desired route parameters into controller for production route.
+
+First change `yesterday` and `today` dummy params we've been using all along to real data.
+
+Modify application index route handler, use `moment` library (was installed with datepicker) to replace yesterday/today with real dates
+
+```javascript
+// loopylog/app/routes/index.js
+import Route from '@ember/routing/route';
+import moment from 'moment'
+
+export default Route.extend({
+  beforeModel() {
+    this.transitionTo('production',
+      `${moment(new Date()).format('MM-DD-YYYY')} 05:00`,
+      `${moment(new Date()).format('MM-DD-YYYY')} 15:00`
+    )
+  }
+});
+```
+
+Now root url redirects to, for eg: `http://localhost:4200/04-24-2019%2005:00/to/04-24-2019%2015:00`
+
+Now looking at production route handler, `params.start` and `params.end` are used in `model` method. Modify route handler to make those available to template:
+
+- Set `params` property on route handler to make it available outside the `model` function
+- Add `setupController` method - here is where you can customize what's available on the controller
+
+```javascript
+// loopylog/app/routes/production.js
+import Route from '@ember/routing/route';
+import $ from 'jquery'
+import production from '../models/production';
+import moment from 'moment';
+
+export default Route.extend({
+  model(params) {
+    this.set('params', params);
+    return new Promise((resolve) => {
+      // fetch array of json data...
+    })
+  },
+  setupController(controller, model) {
+    this._super(controller, model);
+    let params = this.get('params');
+    controller.set('start', params.start);
+    controller.set('end', params.end);
+    controller.set('start_date', moment(new Date(params.start)).format('MM/DD/YYYY'));
+    controller.set('end_date', moment(new Date(params.end)).format('MM/DD/YYYY'));
+    controller.set('start_time', moment(new Date(params.start)).format('HH:mm'));
+    controller.set('end_time', moment(new Date(params.end)).format('HH:mm'));
+  }
+});
+```
+
+Future: Above seems like a lot of work just to get route params available in component template, should be easier when routable components arrive in Ember.
+
+Clicking "Load Data" button -> error in console: Nothing handled 'loadData'. Ember looks for action handler in following order:
+1. Controller
+2. Route Handler
+3. Continues up route hierarchy to find matching action
+
+Where does loadData action belong? Since action will transition to new url, implement it in route handler.
+
+Add `actions` object in production route handler
+
+```javascript
+// loopylog/app/routes/production.js
+// imports...
+export default Route.extend({
+  model(params) {
+    // ...
+  },
+  setupController(controller, model) {
+    // ...
+  },
+  actions: {
+    loadData: function () {
+      console.log('loading data')
+    }
+  }
+});
+```
+
+**Action Bubbling**
+
+Bubbling nature of actions can make it difficult to debug, for eg: where was action fired?
+
+Application Route Handler: loadData(url) { ... }
+
+Production Route Handler: loadData(url) { ... }
+
+Production Controller: loadData(url) { ... }
+
+Components make things more clear, will move logic to component
+
+```shell
+$ ember g component loopy-loader
+installing component
+  create app/components/loopy-loader.js
+  create app/templates/components/loopy-loader.hbs
+installing component-test
+  create tests/integration/components/loopy-loader-test.js
+```
+
+Move `<header>...</header>` containing form out of production template `loopylog/app/templates/production.hbs` and into loopy-loader component
+
+```hbs
+<!-- loopylog/app/templates/production.hbs -->
+{{loopy-loader start_date =start_date start_time=start_time end_date=end_date end_time=end_time}}
+<h2>Production</h2>
+{{outlet}}
+
+<!-- loopylog/app/templates/components/loopy-loader.hbs -->
+<header class="details">
+  <span>
+    <form {{action "loadData" on="submit"}}>
+      <p>Start Date: {{pikaday-input value=start_date format="MM/DD/YYYY"}}</p>
+      <p>End Date: {{pikaday-input value=end_date format="MM/DD/YYYY"}}</p>
+      <p>Start Time: {{input value=start_time}}</p>
+      <p>End Time: {{input value=end_time}}</p>
+      <p><button type="submit">Load Data</button></p>
+    </form>
+  </span>
+</header>
+```
+
+This time clicking Load Data button, console error says: loopy-loader has no action handler for: loadData.
+
+i.e. with components, Ember does NOT go looking up hierarchy for action handler, expects to find it in the component js file, which is more clear. Recall philosophy that components should be isolated.
+
+Implement action in component js, using input values from form and moment library, use those to create a new url and transition to it
+
+```javascript
+// loopylog/app/components/loopy-loader.js
+import Component from '@ember/component';
+import moment from 'momemt';
+
+export default Component.extend({
+  actions: {
+    loadData() {
+      let newStart = moment(new Date(this.get('start_date'))).format('MM-DD-YYYY ') + this.get('start_time');
+      let newEnd = moment(new Date(this.get('end_date'))).format('MM-DD-YYYY ') + this.get('end_time');
+      let url = `/${newStart}/to/${newEnd}`;
+      this.transitionTo(url)
+    }
+  }
+});
+```
+
+But this won't work because components are isolated - don't know how to `transitionTo` other urls, should not know about outside world.
+
+Actual route transition should happen in production route handler, modify `loadData` action to accept url and transition to it
+
+```javascript
+// loopylog/app/routes/production.js
+// imports...
+export default Route.extend({
+  model(params) {
+    // ...
+  },
+  setupController(controller, model) {
+    // ...
+  },
+  actions: {
+    loadData: function () {
+      this.transitionTo(url)
+    }
+  }
+});
+```
+
+Modify production template, pass `loadData` action is as named parameter
+
+```hbs
+<!-- loopylog/app/templates/production.hbs -->
+{{loopy-loader start_date =start_date start_time=start_time end_date=end_date end_time=end_time action="loadData"}}
+<h2>Production</h2>
+{{outlet}}
+```
+
+In loopy-loader component, implementation of loadData action, use `sendAction` method to call the input action with `url`
+
+```javascript
+// loopylog/app/components/loopy-loader.js
+// imports...
+export default Component.extend({
+  actions: {
+    loadData() {
+      let newStart = moment(new Date(this.get('start_date'))).format('MM-DD-YYYY ') + this.get('start_time');
+      let newEnd = moment(new Date(this.get('end_date'))).format('MM-DD-YYYY ') + this.get('end_time');
+      let url = `/${newStart}/to/${newEnd}`;
+      this.sendAction('action', url)
+    }
+  }
+});
+```
+
+Kind of works but `sendAction` also follows action bubbling:
+1. Look in Production Controller
+2. Then Production Route Handler
+3. Then Application Route Handler
+
+`sendAction` doesn't allow returning a value.
+
+How to call route handler function directly?
+
+Solution is *closure action*.
+
+*Closure* is function packaged with variables it has access to. When invoked at a later time, it still has access to the inner variables.
+
+```javascript
+function outer() {
+  var a = "outer";
+  var inner = function() {
+    return a;
+  }
+  return inner;
+}
+
+var f = outer();
+f(); // "outer"
+```
+
+*Closure Action* is action that is packaged with variables it has access to, aka *Execution Context*
+
+```javascript
+Ember.Route.extend({
+  actions: {
+    loadData() {...}
+  }
+});
+
+Ember.Component.extend({
+  actions: {
+    load() {
+      this.get('load')(url);
+    }
+  }
+})
+```
+
+When sending in a closure action, sending in specific funtion. Later when this function is called, it executes in its original location -> precise path of exeuction
+
+![closure action](doc-images/closure-action.png "closure action")
+
+Try this approach, modify production template, change from `action` parameter to `load`, and give it a value of `(action 'loadData)`
+
+```hbs
+<!-- loopylog/app/templates/production.hbs -->
+{{loopy-loader
+  start_date=start_date
+  start_time=start_time
+  end_date=end_date
+  end_time=end_time
+  load=(action 'loadData')
+}}
+...
+```
+
+Now will get error because Ember can't find `loadData` action in production controller. i.e. this stopped the bubbling because there is a `loadData` action defined production route handler.
+
+Install addon to bridge gap until routable components are available
+
+```shell
+$ ember install ember-route-action-helper
+```
+
+Modify template again to call `route-action` instead of `action`
+
+```hbs
+<!-- loopylog/app/templates/production.hbs -->
+{{loopy-loader
+  start_date=start_date
+  start_time=start_time
+  end_date=end_date
+  end_time=end_time
+  load=(route-action 'loadData')
+}}
+...
+```
+
+Now Ember sees the action. In the future when routable components are available, should only have to switch `route-action` to `action`.
+
+In loopy-loader component js, modify `sendAction` to invoke closure action
+
+```javascript
+// loopylog/app/components/loopy-loader.js
+// imports...
+export default Component.extend({
+  actions: {
+    loadData() {
+      let newStart = moment(new Date(this.get('start_date'))).format('MM-DD-YYYY ') + this.get('start_time');
+      let newEnd = moment(new Date(this.get('end_date'))).format('MM-DD-YYYY ') + this.get('end_time');
+      let url = `/${newStart}/to/${newEnd}`;
+      // get closure that was passed in to this component
+      this.get('load')(url);
+    }
+  }
+});
+```
+
+Modify production template to show start/end date/time from url. Change header to link to production route
+
+```hbs
+<!-- loopylog/app/templates/production.hbs -->
+...
+<h2>
+  {{#link-to 'production' start end}}
+    Production From {{start_time}} to {{end_time}}
+  {{link-to}}
+</h2>
+...
+```
+
+Now Production sub-header in UI displays start and end times from URL BUT if change any of these times in the form, header also changes. Not valid because data hasn't changed yet therefore header should not have changed.
+
+Simple solution - use `unbound` helper so that the fields are no longer bound to original property.
+
+```hbs
+<!-- loopylog/app/templates/production.hbs -->
+...
+<h2>
+  {{#link-to 'production' start end}}
+    Production From {{unbound start_time}} to {{unbound end_time}}
+  {{link-to}}
+</h2>
+...
+```
+
+### More Closure Actions
+
+Make table sortable. Recall we have table header cell component. Modify so clicking will sort data. Add sort action to template
+
+```hbs
+<!-- loopylog/app/templates/components/table-th.hbs -->
+{{#if hasBlock}}
+  {{yield}}
+{{else}}
+  {{name}} <span {{action "sort"}}>&#x25BC;</span>
+{{/if}}
+```
+
+This header component could be used for many different tables, so shouldn't know how to sort every kind of data.
+
+Solution is to pass in *closure action* of external sort function. And tell each table header which column it's sorting.
+
+![ddau table sort](doc-images/ddau-table-sort.png "ddau table sort")
+
+Add `actions` object with `sort` action in table header component js. Action implementation invokes closure action `sort_data`, passing it `sort_by` as argument
+
+```javascript
+// loopylog/app/components/table-th.js
+import Component from '@ember/component';
+export default Component.extend({
+  tagName: 'th',
+  actions: {
+    sort() {
+      this.get('sort_data')(this.get('sort_by'));
+    }
+  }
+});
+```
+
+Table header component is used by `table-production` component. Add `actions` object to its js. Whenever table header is clicked, a closure action will be called which will set the `sort_by` parameter with whatever column sorting should be happening on.
+
+Also add computed property that depends on model and `sort_by` property, which uses default value for page loading the first time.
+
+Computed property `sorted_model` returns sorted model by `sort_by` value.
+
+```javascript
+// loopylog/app/components/table-production.js
+// imports...
+export default Component.extend({
+  // other computed properties...
+  sort_by: 'default',
+  sorted_model: computed('model', 'sort_by', function () {
+    switch (this.get('sort_by')) {
+      case 'boards':
+        return this.get('model').sortBy('boards', 'DimensionName').reverse();
+      case 'boardfeet':
+        return this.get('model').sortBy('boardfeet', 'DimensionName').reverse();
+      default:
+        return this.get('model')
+    }
+  }),
+  actions: {
+    sort_data(column) {
+      this.set('sort_by', column);
+    }
+  }
+});
+```
+
+Modify table-production template, pass in sort_by and sort_data attributes to each `table-th` component, and modify `each` helper to iterate over `sorted_model` rather than `model`
+
+```hbs
+<!-- loopylog/app/templates/components/table-production.hbs -->
+<thead>
+  <tr>
+    {{table-th name="Dimension" sort_by="default" sort_data=(action "sort_data")}}
+    {{table-th name="Boards" sort_by="boards" sort_data=(action "sort_data")}}
+    {{table-th name="BoardFeet" sort_by="boardfeet" sort_data=(action "sort_data")}}
+    {{#table-th}}{{fa-icon "cogs"}}{{/table-th}}
+  </tr>
+</thead>
+<tbody>
+  ...
+  {{#each sorted_model as |row|}}
+    ...
+  {{/each}}
+</tbody>
+```
+
+Now clicking on down arrow for any table header sorts data by that column.
+
+Change color of arrow to black to indicate currently sorted column.
+
+Modify table-production template to pass in current sort to each table-th component
+
+```hbs
+<!-- loopylog/app/templates/components/table-production.hbs -->
+...
+{{table-th current_sort=sort_by name="Dimension" sort_by="default" sort_data=(action 'sort_data')}}
+{{table-th current_sort=sort_by name="Boards" sort_by="boards" sort_data=(action 'sort_data')}}
+{{table-th current_sort=sort_by name="BoardFeet" sort_by="boardfeet" sort_data=(action 'sort_data')}}
+...
+```
+
+Add new computed property to table-th js depending on sort_by and current_sort, which returns "sorted" if the two are equal, empty string otherwise. Then bind this result to class attribute of component.
+
+```javascript
+// loopylog/app/components/table-th.js
+import Component from '@ember/component';
+import { computed } from '@ember/object';
+
+export default Component.extend({
+  classNameBindings: ['th_class'],
+  tagName: 'th',
+  th_class: computed('sort_by', 'current_sort', function () {
+    return (this.get('sort_by') === this.get('current_sort')) ? 'sorted' : '';
+  }),
+  actions: {
+    sort() {
+      this.get('sort_data')(this.get('sort_by'));
+    }
+  }
+});
 ```
